@@ -251,6 +251,31 @@ As programs grow to sustained high activity (large concurrent cohorts + dense da
 4. **Observability:** dashboards, error logging, dead-letter replay.
 5. **Hardening:** batching optimization, archival jobs, config hardening, scale tuning.
 
+
+## 15) Pre-production manual test runbook (Apps Script editor)
+
+Before each production rollout, operators should run the lightweight script tests in `apps_script/tests.gs` from the Apps Script editor.
+
+### Operator steps
+
+1. Open the Apps Script project bound to the production candidate.
+2. Add or sync `apps_script/tests.gs` into the project.
+3. In the function selector, run `runAllPreflightTests` first.
+4. Run each targeted test function individually if needed:
+   - `testSlackSignatureVerificationEdgeCases`
+   - `testNextLessonResolutionWithSequenceGaps`
+   - `testQueueRetryBackoffCalculation`
+   - `testIdempotentDuplicateRejection`
+5. Open **Execution log** and verify each test prints a `PASS ...` entry and no exception stack traces.
+6. If any test fails, block rollout, fix logic/configuration, and rerun all tests before approving release.
+
+### Expected outcomes
+
+- Signature checks reject stale/future/tampered requests and accept valid signed requests.
+- Next-lesson resolution correctly advances across inactive/missing sequence numbers.
+- Retry backoff grows exponentially, caps safely, and honors `Retry-After` when present.
+- Duplicate fingerprints are rejected while unseen fingerprints are accepted.
+
 ## Final recommendation
 
 This stack is production-viable for a Slack-native internal LMS when queueing, idempotency, validation, auditability, and disciplined sheet operations are treated as non-negotiable engineering requirements.
