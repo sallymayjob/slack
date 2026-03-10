@@ -1,28 +1,42 @@
 /**
- * Parse and route inbound Slack requests to module handlers.
+ * Router idempotency checks for inbound requests.
  */
-function Router_handleRequest(request) {
-  var payload = Router_parseBody_(request.body);
 
-  if (payload && payload.type === 'url_verification' && payload.challenge) {
-    return ContentService.createTextOutput(payload.challenge)
-      .setMimeType(ContentService.MimeType.TEXT);
+var ROUTER_REQUEST_KEY_PREFIX = 'router:request:';
+
+function routeInboundRequest(request) {
+  var requestKey = buildInboundRequestKey(request);
+  if (!storeInboundRequestKeyIfNew_(requestKey)) {
+    return {
+      ok: true,
+      duplicate: true,
+      requestKey: requestKey
+    };
   }
 
-  // TODO: route to Commands, Events, Modals, and Admin handlers.
-  return ContentService.createTextOutput(JSON.stringify({
-    ok: true,
-    message: 'Request received',
-    payloadType: payload && payload.type ? payload.type : 'unknown'
-  })).setMimeType(ContentService.MimeType.JSON);
+  return dispatchInboundRequest_(request, requestKey);
 }
 
-function Router_parseBody_(body) {
-  if (!body) return {};
-
-  try {
-    return JSON.parse(body);
-  } catch (err) {
-    return { raw: body };
+function dispatchInboundRequest_(request, requestKey) {
+  // Delegate to existing router implementation if present.
+  if (typeof handleInboundRequest === 'function') {
+    return handleInboundRequest(request, requestKey);
   }
+
+  return {
+    ok: true,
+    duplicate: false,
+    requestKey: requestKey
+  };
+}
+
+function storeInboundRequestKeyIfNew_(requestKey) {
+  var props = PropertiesService.getScriptProperties();
+  var propKey = ROUTER_REQUEST_KEY_PREFIX + requestKey;
+  if (props.getProperty(propKey)) {
+    return false;
+  }
+
+  props.setProperty(propKey, new Date().toISOString());
+  return true;
 }
